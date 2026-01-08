@@ -6,11 +6,9 @@ on:
 
 jobs:
   publish:
-    # Fork repolarda publish olmasın
     if: github.repository_owner == 'atakanatali'
     runs-on: ubuntu-latest
 
-    # Environment koruması (manuel onay)
     environment: nuget-prod
 
     steps:
