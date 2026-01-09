@@ -6,9 +6,8 @@ on:
 
 jobs:
   publish:
-    if: github.repository_owner == 'atakanatali'
+    if: github.repository_owner == 'YOUR_GITHUB_USERNAME'
     runs-on: ubuntu-latest
-
     environment: nuget-prod
 
     steps:

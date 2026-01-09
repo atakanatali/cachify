@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <PackageId>Cachify.Memcached</PackageId>
+    <Description>Memcached provider for Cachify (MVP+).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cachify.Abstractions\Cachify.Abstractions.csproj" />
+    <ProjectReference Include="..\Cachify.Core\Cachify.Core.csproj" />
+  </ItemGroup>
+</Project>

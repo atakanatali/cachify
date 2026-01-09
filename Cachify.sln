@@ -1,0 +1,54 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.35027.167
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cachify.Abstractions", "src\Cachify.Abstractions\Cachify.Abstractions.csproj", "{B253EAE2-BF65-4481-8C4F-B8715B0C5C57}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cachify.Core", "src\Cachify.Core\Cachify.Core.csproj", "{351ED8A3-017E-4A3B-BAF6-B332841B485E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cachify.Memory", "src\Cachify.Memory\Cachify.Memory.csproj", "{D76BFC9D-4698-4A7A-ADBE-8915E12B15B8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cachify.Redis", "src\Cachify.Redis\Cachify.Redis.csproj", "{DB5DAE74-1AD5-4BC0-970D-E3A178B55752}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cachify.Memcached", "src\Cachify.Memcached\Cachify.Memcached.csproj", "{A4D3700E-0B94-40E9-AC32-7D6828965357}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cachify.AspNetCore", "src\Cachify.AspNetCore\Cachify.AspNetCore.csproj", "{8359F4AC-A7BC-4406-9C9C-556FE1CC8653}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cachify.Tests", "tests\Cachify.Tests\Cachify.Tests.csproj", "{9A0B9345-2C7D-4D11-8B3C-165E95A9F108}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B253EAE2-BF65-4481-8C4F-B8715B0C5C57}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B253EAE2-BF65-4481-8C4F-B8715B0C5C57}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B253EAE2-BF65-4481-8C4F-B8715B0C5C57}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B253EAE2-BF65-4481-8C4F-B8715B0C5C57}.Release|Any CPU.Build.0 = Release|Any CPU
+		{351ED8A3-017E-4A3B-BAF6-B332841B485E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{351ED8A3-017E-4A3B-BAF6-B332841B485E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{351ED8A3-017E-4A3B-BAF6-B332841B485E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{351ED8A3-017E-4A3B-BAF6-B332841B485E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D76BFC9D-4698-4A7A-ADBE-8915E12B15B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D76BFC9D-4698-4A7A-ADBE-8915E12B15B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D76BFC9D-4698-4A7A-ADBE-8915E12B15B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D76BFC9D-4698-4A7A-ADBE-8915E12B15B8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB5DAE74-1AD5-4BC0-970D-E3A178B55752}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB5DAE74-1AD5-4BC0-970D-E3A178B55752}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB5DAE74-1AD5-4BC0-970D-E3A178B55752}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB5DAE74-1AD5-4BC0-970D-E3A178B55752}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4D3700E-0B94-40E9-AC32-7D6828965357}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4D3700E-0B94-40E9-AC32-7D6828965357}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4D3700E-0B94-40E9-AC32-7D6828965357}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4D3700E-0B94-40E9-AC32-7D6828965357}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8359F4AC-A7BC-4406-9C9C-556FE1CC8653}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8359F4AC-A7BC-4406-9C9C-556FE1CC8653}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8359F4AC-A7BC-4406-9C9C-556FE1CC8653}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8359F4AC-A7BC-4406-9C9C-556FE1CC8653}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9A0B9345-2C7D-4D11-8B3C-165E95A9F108}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A0B9345-2C7D-4D11-8B3C-165E95A9F108}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A0B9345-2C7D-4D11-8B3C-165E95A9F108}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A0B9345-2C7D-4D11-8B3C-165E95A9F108}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
