@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <PackageId>Cachify.Abstractions</PackageId>
+    <Description>Core abstractions for Cachify.</Description>
+  </PropertyGroup>
+</Project>
