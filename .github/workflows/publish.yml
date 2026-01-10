@@ -1,12 +1,10 @@
 name: Publish to NuGet
 
-on:
-  release:
-    types: [published]
+on: workflow_dispatch
 
 jobs:
   publish:
-    if: github.repository_owner == 'YOUR_GITHUB_USERNAME'
+    if: github.repository_owner == 'atakanatali'
     runs-on: ubuntu-latest
     environment: nuget-prod
 
