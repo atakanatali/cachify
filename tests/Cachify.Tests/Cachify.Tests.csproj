@@ -8,11 +8,14 @@
     <ProjectReference Include="..\..\src\Cachify.Core\Cachify.Core.csproj" />
     <ProjectReference Include="..\..\src\Cachify.Abstractions\Cachify.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Cachify.Redis\Cachify.Redis.csproj" />
+    <ProjectReference Include="..\..\src\Cachify.AspNetCore\Cachify.AspNetCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
   </ItemGroup>
 </Project>

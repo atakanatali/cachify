@@ -37,6 +37,82 @@ var value = await cache.GetOrSetAsync(
 - `Cachify.Redis` — Redis provider (L2) + Redis backplane (optional).
 - `Cachify.AspNetCore` — DI + options integration.
 
+## Request/response caching (ASP.NET Core)
+
+Cachify ships a request caching layer that uses the core cache stack underneath. You can integrate it through
+middleware, endpoint metadata, or by injecting the `RequestCacheService` directly.
+
+### Registering services
+
+```csharp
+builder.Services.AddCachify(options =>
+{
+    options.KeyPrefix = "myapp";
+    options.DefaultTtl = TimeSpan.FromMinutes(5);
+    options.UseMemory();
+});
+
+builder.Services.AddRequestCaching(options =>
+{
+    options.DefaultDuration = TimeSpan.FromSeconds(60);
+    options.CacheableMethods.Add(HttpMethods.Post); // opt in to POST caching if desired
+    options.KeyOptions.IncludeBody = true;
+});
+```
+
+### Middleware usage
+
+```csharp
+app.UseRouting();
+app.UseRequestCaching();
+app.MapGet("/weather", () => Results.Json(new { Temperature = 72 }));
+```
+
+### Endpoint metadata (attribute + minimal APIs)
+
+```csharp
+[RequestCache(DurationSeconds = 30, IncludeRequestBody = false)]
+public IActionResult GetWeather() => Ok(new { Temperature = 72 });
+
+app.MapPost("/echo", (string value) => Results.Text(value))
+   .WithRequestCaching(policy =>
+   {
+       policy.Duration = TimeSpan.FromSeconds(15);
+       policy.IncludeRequestBody = true;
+       policy.CacheableMethods = new[] { HttpMethods.Post };
+   });
+```
+
+### Direct API usage
+
+```csharp
+public async Task<IResult> GetAsync(HttpContext context, RequestCacheService cacheService)
+{
+    await cacheService.ExecuteAsync(context, null, async ct =>
+    {
+        var payload = new { Message = "hello" };
+        await context.Response.WriteAsJsonAsync(payload, ct);
+    });
+
+    return Results.Empty;
+}
+```
+
+### Metadata headers
+
+By default, request caching emits response headers to indicate cache hits/misses and stale responses:
+
+- `X-Cachify-Cache`: `HIT` or `MISS`
+- `X-Cachify-Cache-Stale`: `true` or `false`
+
+Use `RequestCacheMetadataAccessor.TryGetMetadata` to access the same information programmatically when needed.
+
+### Safety defaults
+
+- Requests with `Authorization` headers are not cached unless `CacheAuthenticatedResponses` is enabled.
+- `Cache-Control: no-store`, `no-cache`, or `private` prevents caching by default.
+- `Set-Cookie` responses are excluded by default unless explicitly enabled.
+
 ## Configuration
 
 Key options on `CachifyOptions`:
