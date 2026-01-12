@@ -66,4 +66,22 @@ public static class ServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Adds request/response caching services for ASP.NET Core pipelines.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configure">The request cache options configuration action.</param>
+    public static IServiceCollection AddRequestCaching(
+        this IServiceCollection services,
+        Action<RequestCacheOptions>? configure = null)
+    {
+        if (configure is not null)
+        {
+            services.Configure(configure);
+        }
+
+        services.AddSingleton<RequestCacheService>();
+        return services;
+    }
 }
