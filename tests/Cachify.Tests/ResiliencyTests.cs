@@ -185,6 +185,7 @@ public sealed class ResiliencyTests
         return new CompositeCacheService(
             memory,
             distributed,
+            null,
             options,
             new DefaultCacheKeyBuilder(),
             new CacheStampedeGuard(),

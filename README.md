@@ -34,7 +34,7 @@ var value = await cache.GetOrSetAsync(
 - `Cachify.Abstractions` — interfaces and core models.
 - `Cachify.Core` — composite orchestration, serializers, key builder, stampede guard.
 - `Cachify.Memory` — in-memory provider (L1).
-- `Cachify.Redis` — Redis provider (L2).
+- `Cachify.Redis` — Redis provider (L2) + Redis backplane (optional).
 - `Cachify.AspNetCore` — DI + options integration.
 
 ## Configuration
@@ -44,6 +44,7 @@ Key options on `CachifyOptions`:
 - `KeyPrefix`
 - `DefaultTtl`
 - `JitterRatio`
+- `Backplane` (optional distributed invalidation)
 
 ## Observability
 
@@ -51,9 +52,32 @@ Cachify emits metrics and traces:
 
 - Meter name: `Cachify`
 - Counters: `cache_hit_total`, `cache_miss_total`, `cache_set_total`, `cache_remove_total`
+- Counters: `cache_backplane_invalidation_published_total`, `cache_backplane_invalidation_received_total`
 - Counters: `stale_served_count`, `factory_timeout_soft_count`, `factory_timeout_hard_count`, `failsafe_used_count`
 - Histogram: `cache_get_duration_ms`
 - Activity source: `Cachify`
+
+## Backplane invalidation (optional)
+
+Enable distributed L1 invalidation using a backplane (Redis pub/sub):
+
+```csharp
+builder.Services.AddCachify(options =>
+{
+    options.KeyPrefix = "myapp";
+    options.Backplane.Enabled = true;
+    options.Backplane.ChannelName = "cachify:invalidation";
+    options.Backplane.InstanceId = Environment.MachineName;
+
+    options.UseMemory();
+    options.UseRedis(redis =>
+    {
+        redis.ConnectionString = "localhost:6379";
+    });
+});
+
+builder.Services.AddSingleton<ICacheBackplane, RedisBackplane>();
+```
 
 ## Resiliency (MVP)
 
