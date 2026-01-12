@@ -4,6 +4,9 @@ using Cachify.Redis;
 
 namespace Cachify.AspNetCore;
 
+/// <summary>
+/// Configures Cachify services via dependency injection.
+/// </summary>
 public sealed class CachifyBuilderOptions : CachifyOptions
 {
     internal bool MemoryEnabled { get; private set; }
@@ -13,11 +16,18 @@ public sealed class CachifyBuilderOptions : CachifyOptions
     internal RedisOptions? RedisOptions { get; private set; }
     internal MemcachedOptions? MemcachedOptions { get; private set; }
 
+    /// <summary>
+    /// Enables the in-memory cache provider.
+    /// </summary>
     public void UseMemory()
     {
         MemoryEnabled = true;
     }
 
+    /// <summary>
+    /// Enables the Redis cache provider.
+    /// </summary>
+    /// <param name="configure">The Redis configuration action.</param>
     public void UseRedis(Action<RedisOptions> configure)
     {
         RedisEnabled = true;
@@ -26,6 +36,10 @@ public sealed class CachifyBuilderOptions : CachifyOptions
         RedisOptions = options;
     }
 
+    /// <summary>
+    /// Enables the Memcached cache provider.
+    /// </summary>
+    /// <param name="configure">The Memcached configuration action.</param>
     public void UseMemcached(Action<MemcachedOptions> configure)
     {
         MemcachedEnabled = true;

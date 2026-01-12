@@ -2,8 +2,12 @@ using Cachify.Abstractions;
 
 namespace Cachify.Core;
 
+/// <summary>
+/// Builds cache keys by concatenating optional prefix and region segments.
+/// </summary>
 public sealed class DefaultCacheKeyBuilder : ICacheKeyBuilder
 {
+    /// <inheritdoc />
     public string Build(string key, string? region = null, string? prefix = null)
     {
         var parts = new List<string>();

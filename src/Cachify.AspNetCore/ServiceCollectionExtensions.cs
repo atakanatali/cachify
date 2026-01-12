@@ -9,8 +9,16 @@ using StackExchange.Redis;
 
 namespace Cachify.AspNetCore;
 
+/// <summary>
+/// Provides dependency injection extensions for Cachify.
+/// </summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Adds Cachify services using the provided builder configuration.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configure">The builder configuration action.</param>
     public static IServiceCollection AddCachify(
         this IServiceCollection services,
         Action<CachifyBuilderOptions> configure)

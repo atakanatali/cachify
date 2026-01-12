@@ -51,8 +51,29 @@ Cachify emits metrics and traces:
 
 - Meter name: `Cachify`
 - Counters: `cache_hit_total`, `cache_miss_total`, `cache_set_total`, `cache_remove_total`
+- Counters: `stale_served_count`, `factory_timeout_soft_count`, `factory_timeout_hard_count`, `failsafe_used_count`
 - Histogram: `cache_get_duration_ms`
 - Activity source: `Cachify`
+
+## Resiliency (MVP)
+
+Cachify includes a lightweight resiliency layer in the composite orchestrator. It preserves a small public surface
+by using a single `CacheResilienceOptions` object (global or per-entry) and internal metadata stored alongside entries.
+
+### How it works
+
+- **Fail-safe stale fallback**: entries are stored for `TTL + FailSafeMaxDuration`. Logical expiration is tracked in
+  metadata, so stale values can be served when the factory fails or times out.
+- **Soft timeout**: if a factory exceeds `SoftTimeout`, Cachify returns a stale value (if available) while the refresh
+  continues in the background.
+- **Hard timeout**: if a factory exceeds `HardTimeout`, the factory is canceled and a timeout is thrown unless a stale
+  value is available.
+- **Background refresh**: when stale is served due to fail-safe or timeouts, a refresh is scheduled with stampede
+  protection to keep only one refresh per key in flight.
+
+**Failure behavior**: when L2 fails and a stale value exists in L1, Cachify serves the stale entry and logs the L2
+error instead of failing the call (unless `FailFastOnL2Errors` is enabled and no stale exists). Stale responses are
+tagged in activities (`cachify.stale`, `cachify.stale_reason`, `cachify.timeout_type`) for observability.
 
 ## Roadmap
 
