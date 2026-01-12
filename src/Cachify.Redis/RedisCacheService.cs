@@ -4,12 +4,21 @@ using StackExchange.Redis;
 
 namespace Cachify.Redis;
 
+/// <summary>
+/// Implements a Redis-backed cache service.
+/// </summary>
 public sealed class RedisCacheService : IDistributedCacheService, ISingleCacheService
 {
     private readonly IConnectionMultiplexer _connection;
     private readonly ICacheSerializer _serializer;
     private readonly ILogger<RedisCacheService> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RedisCacheService"/> class.
+    /// </summary>
+    /// <param name="connection">The Redis connection multiplexer.</param>
+    /// <param name="serializer">The serializer used for payloads.</param>
+    /// <param name="logger">The logger instance.</param>
     public RedisCacheService(
         IConnectionMultiplexer connection,
         ICacheSerializer serializer,
@@ -20,6 +29,7 @@ public sealed class RedisCacheService : IDistributedCacheService, ISingleCacheSe
         _logger = logger;
     }
 
+    /// <inheritdoc />
     public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
     {
         var db = _connection.GetDatabase();
@@ -32,6 +42,7 @@ public sealed class RedisCacheService : IDistributedCacheService, ISingleCacheSe
         return _serializer.Deserialize<T>(value!);
     }
 
+    /// <inheritdoc />
     public async Task SetAsync<T>(string key, T value, CacheEntryOptions? options = null, CancellationToken cancellationToken = default)
     {
         var db = _connection.GetDatabase();
@@ -49,6 +60,7 @@ public sealed class RedisCacheService : IDistributedCacheService, ISingleCacheSe
         }
     }
 
+    /// <inheritdoc />
     public async Task RemoveAsync(string key, CancellationToken cancellationToken = default)
     {
         var db = _connection.GetDatabase();
@@ -63,6 +75,7 @@ public sealed class RedisCacheService : IDistributedCacheService, ISingleCacheSe
         }
     }
 
+    /// <inheritdoc />
     public async Task<T> GetOrSetAsync(
         string key,
         Func<CancellationToken, Task<T>> factory,
