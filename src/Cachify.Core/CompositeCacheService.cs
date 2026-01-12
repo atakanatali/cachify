@@ -9,13 +9,15 @@ namespace Cachify.Core;
 /// <summary>
 /// Orchestrates composite cache behavior across memory (L1) and distributed (L2) layers.
 /// </summary>
-public sealed class CompositeCacheService : ICompositeCacheService
+public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
 {
     private static readonly Meter Meter = new("Cachify");
     private static readonly Counter<long> CacheHitTotal = Meter.CreateCounter<long>("cache_hit_total");
     private static readonly Counter<long> CacheMissTotal = Meter.CreateCounter<long>("cache_miss_total");
     private static readonly Counter<long> CacheSetTotal = Meter.CreateCounter<long>("cache_set_total");
     private static readonly Counter<long> CacheRemoveTotal = Meter.CreateCounter<long>("cache_remove_total");
+    private static readonly Counter<long> BackplaneInvalidationPublishedTotal = Meter.CreateCounter<long>("cache_backplane_invalidation_published_total");
+    private static readonly Counter<long> BackplaneInvalidationReceivedTotal = Meter.CreateCounter<long>("cache_backplane_invalidation_received_total");
     private static readonly Histogram<double> CacheGetDuration = Meter.CreateHistogram<double>("cache_get_duration_ms");
     private static readonly Counter<long> StaleServedTotal = Meter.CreateCounter<long>("stale_served_count");
     private static readonly Counter<long> SoftTimeoutTotal = Meter.CreateCounter<long>("factory_timeout_soft_count");
@@ -28,12 +30,15 @@ public sealed class CompositeCacheService : ICompositeCacheService
 
     private readonly IMemoryCacheService? _memory;
     private readonly IDistributedCacheService? _distributed;
+    private readonly ICacheBackplane? _backplane;
     private readonly CachifyOptions _options;
     private readonly ICacheKeyBuilder _keyBuilder;
     private readonly CacheStampedeGuard _guard;
     private readonly ILogger<CompositeCacheService> _logger;
     private readonly TimeProvider _timeProvider;
     private readonly ConcurrentDictionary<string, Task> _refreshTasks = new();
+    private readonly CacheBackplaneOptions _backplaneOptions;
+    private readonly IDisposable? _backplaneSubscription;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CompositeCacheService"/> class.
@@ -47,6 +52,7 @@ public sealed class CompositeCacheService : ICompositeCacheService
     public CompositeCacheService(
         IMemoryCacheService? memory,
         IDistributedCacheService? distributed,
+        ICacheBackplane? backplane,
         CachifyOptions options,
         ICacheKeyBuilder keyBuilder,
         CacheStampedeGuard guard,
@@ -54,11 +60,18 @@ public sealed class CompositeCacheService : ICompositeCacheService
     {
         _memory = memory;
         _distributed = distributed;
+        _backplane = backplane;
         _options = options;
         _keyBuilder = keyBuilder;
         _guard = guard;
         _logger = logger;
         _timeProvider = options.TimeProvider;
+        _backplaneOptions = options.Backplane;
+
+        if (_backplane is not null && _backplaneOptions.Enabled)
+        {
+            _backplaneSubscription = _backplane.Subscribe(HandleBackplaneInvalidationAsync);
+        }
     }
 
     /// <inheritdoc />
@@ -116,6 +129,7 @@ public sealed class CompositeCacheService : ICompositeCacheService
             await _memory.RemoveAsync(metadataKey, cancellationToken).ConfigureAwait(false);
         }
 
+        await PublishInvalidationAsync(cacheKey, cancellationToken).ConfigureAwait(false);
         CacheRemoveTotal.Add(1);
     }
 
@@ -308,7 +322,66 @@ public sealed class CompositeCacheService : ICompositeCacheService
             await _memory.SetAsync(metadataKey, metadata, storageOptions, cancellationToken).ConfigureAwait(false);
         }
 
+        await PublishInvalidationAsync(cacheKey, cancellationToken).ConfigureAwait(false);
         CacheSetTotal.Add(1);
+    }
+
+    /// <summary>
+    /// Publishes an invalidation event to the configured backplane.
+    /// </summary>
+    /// <remarks>
+    /// Design Notes: publishing is best-effort and should never block primary cache operations.
+    /// </remarks>
+    private async Task PublishInvalidationAsync(string cacheKey, CancellationToken cancellationToken)
+    {
+        if (_backplane is null || !_backplaneOptions.Enabled)
+        {
+            return;
+        }
+
+        try
+        {
+            var invalidation = CacheInvalidation.ForKey(cacheKey, _backplaneOptions.InstanceId);
+            await _backplane.PublishInvalidationAsync(invalidation, cancellationToken).ConfigureAwait(false);
+            BackplaneInvalidationPublishedTotal.Add(1, new KeyValuePair<string, object?>("type", "key"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Cachify backplane publish failed for {Key}", cacheKey);
+        }
+    }
+
+    /// <summary>
+    /// Handles invalidation messages received from the backplane.
+    /// </summary>
+    /// <remarks>
+    /// Design Notes: only L1 entries are cleared; L2 remains the source of truth for refills.
+    /// </remarks>
+    private async Task HandleBackplaneInvalidationAsync(CacheInvalidation invalidation, CancellationToken cancellationToken)
+    {
+        if (_memory is null || !_backplaneOptions.Enabled)
+        {
+            return;
+        }
+
+        if (string.Equals(invalidation.SourceId, _backplaneOptions.InstanceId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(invalidation.Key))
+        {
+            await _memory.RemoveAsync(invalidation.Key, cancellationToken).ConfigureAwait(false);
+            await _memory.RemoveAsync(BuildMetadataKey(invalidation.Key), cancellationToken).ConfigureAwait(false);
+            BackplaneInvalidationReceivedTotal.Add(1, new KeyValuePair<string, object?>("type", "key"));
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(invalidation.Tag))
+        {
+            _logger.LogDebug("Cachify backplane tag invalidation ignored for {Tag}", invalidation.Tag);
+            BackplaneInvalidationReceivedTotal.Add(1, new KeyValuePair<string, object?>("type", "tag"));
+        }
     }
 
     /// <summary>
@@ -734,5 +807,13 @@ public sealed class CompositeCacheService : ICompositeCacheService
             LinkedCts?.Dispose();
             TimeoutCts?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Releases resources used by the composite cache service.
+    /// </summary>
+    public void Dispose()
+    {
+        _backplaneSubscription?.Dispose();
     }
 }

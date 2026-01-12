@@ -40,4 +40,13 @@ public sealed class CachifyOptions
     /// Design Notes: exposing the time provider keeps timing tests deterministic without inflating the cache API surface.
     /// </remarks>
     public TimeProvider TimeProvider { get; set; } = TimeProvider.System;
+
+    /// <summary>
+    /// Gets or sets the backplane configuration for distributed invalidation.
+    /// </summary>
+    /// <remarks>
+    /// Design Notes: the backplane remains optional and disabled by default to avoid coupling
+    /// core usage to pub/sub dependencies.
+    /// </remarks>
+    public CacheBackplaneOptions Backplane { get; set; } = new();
 }

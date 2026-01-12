@@ -54,11 +54,12 @@ public static class ServiceCollectionExtensions
         {
             var memory = sp.GetService<IMemoryCacheService>();
             var distributed = sp.GetService<IDistributedCacheService>();
+            var backplane = sp.GetService<ICacheBackplane>();
             var options = sp.GetRequiredService<CachifyOptions>();
             var keyBuilder = sp.GetRequiredService<ICacheKeyBuilder>();
             var guard = sp.GetRequiredService<CacheStampedeGuard>();
             var logger = sp.GetRequiredService<ILogger<CompositeCacheService>>();
-            return new CompositeCacheService(memory, distributed, options, keyBuilder, guard, logger);
+            return new CompositeCacheService(memory, distributed, backplane, options, keyBuilder, guard, logger);
         });
 
         services.AddSingleton<ICacheService>(sp => sp.GetRequiredService<ICompositeCacheService>());

@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cachify.Core\Cachify.Core.csproj" />
     <ProjectReference Include="..\..\src\Cachify.Abstractions\Cachify.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Cachify.Redis\Cachify.Redis.csproj" />
   </ItemGroup>
 
   <ItemGroup>
