@@ -1,3 +1,7 @@
+using System.Buffers;
+using System.Buffers.Binary;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -23,6 +27,12 @@ public sealed class RequestCacheService
         "Transfer-Encoding"
     };
 
+    private static readonly Meter Meter = new("Cachify");
+    private static readonly Counter<long> SimilarityCacheHitTotal = Meter.CreateCounter<long>("similarity_cache_hit");
+    private static readonly Counter<long> SimilarityCacheMissTotal = Meter.CreateCounter<long>("similarity_cache_miss");
+    private static readonly Counter<long> SimilarityCandidatesCount = Meter.CreateCounter<long>("similarity_candidates_count");
+    private static readonly Histogram<double> SimilarityBestScoreHistogram = Meter.CreateHistogram<double>("similarity_best_score_histogram");
+
     private const string ExecutionItemKey = "Cachify.RequestCache.Executed";
     private const string MetadataWriterItemKey = "Cachify.RequestCache.MetadataWriter";
 
@@ -30,6 +40,12 @@ public sealed class RequestCacheService
     private readonly RequestCacheOptions _options;
     private readonly ILogger<RequestCacheService> _logger;
     private readonly TimeProvider _timeProvider;
+    private readonly IRequestCanonicalizer _canonicalizer;
+    private readonly IRequestHasher _hasher;
+    private readonly SimHashSignatureBuilder _signatureBuilder;
+    private readonly ISimilarityScorer _similarityScorer;
+    private readonly ISimilarityRequestIndex _similarityIndex;
+    private readonly IEmbeddingSimilarityScorer? _embeddingScorer;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RequestCacheService"/> class.
@@ -38,12 +54,24 @@ public sealed class RequestCacheService
         ICacheService cache,
         IOptions<RequestCacheOptions> options,
         ILogger<RequestCacheService> logger,
+        IRequestCanonicalizer canonicalizer,
+        IRequestHasher hasher,
+        SimHashSignatureBuilder signatureBuilder,
+        ISimilarityScorer similarityScorer,
+        ISimilarityRequestIndex similarityIndex,
+        IEmbeddingSimilarityScorer? embeddingScorer = null,
         TimeProvider? timeProvider = null)
     {
         _cache = cache;
         _options = options.Value;
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _canonicalizer = canonicalizer;
+        _hasher = hasher;
+        _signatureBuilder = signatureBuilder;
+        _similarityScorer = similarityScorer;
+        _similarityIndex = similarityIndex;
+        _embeddingScorer = embeddingScorer;
     }
 
     /// <summary>
@@ -81,15 +109,15 @@ public sealed class RequestCacheService
             return;
         }
 
-        var cacheEntry = await _cache.GetAsync<RequestCacheEntry>(decision.CacheKey!, cancellationToken).ConfigureAwait(false);
-        if (cacheEntry is not null)
+        var lookup = await TryGetCachedEntryAsync(context, decision, cancellationToken).ConfigureAwait(false);
+        if (lookup.Entry is not null)
         {
-            ApplyCachedResponse(context, cacheEntry, decision);
+            ApplyCachedResponse(context, lookup.Entry, decision, lookup.SimilarityScore);
             return;
         }
 
         EnsureMetadataWriter(context);
-        EmitMetadata(context, isHit: false, isStale: false, decision.CacheKey!, cachedAt: null, decision.Duration);
+        EmitMetadata(context, isHit: false, isStale: false, decision.CacheKey!, cachedAt: null, decision.Duration, similarityScore: null);
 
         if (!decision.EnableResponseBuffering)
         {
@@ -128,7 +156,12 @@ public sealed class RequestCacheService
         await _cache.SetAsync(decision.CacheKey!, entry, new CacheEntryOptions { TimeToLive = decision.Duration }, cancellationToken)
             .ConfigureAwait(false);
 
-        EmitMetadata(context, isHit: false, isStale: false, decision.CacheKey!, entry.CachedAt, decision.Duration);
+        if (decision.Mode == RequestCacheMode.Similarity && decision.SimilarityRequest is not null)
+        {
+            AddSimilarityIndexEntry(decision, entry);
+        }
+
+        EmitMetadata(context, isHit: false, isStale: false, decision.CacheKey!, entry.CachedAt, decision.Duration, similarityScore: null);
     }
 
     /// <summary>
@@ -155,7 +188,8 @@ public sealed class RequestCacheService
             return null;
         }
 
-        return await _cache.GetAsync<RequestCacheEntry>(decision.CacheKey!, cancellationToken).ConfigureAwait(false);
+        var lookup = await TryGetCachedEntryAsync(context, decision, cancellationToken).ConfigureAwait(false);
+        return lookup.Entry;
     }
 
     /// <summary>
@@ -192,6 +226,11 @@ public sealed class RequestCacheService
         entry.CachedAt = _timeProvider.GetUtcNow();
         await _cache.SetAsync(decision.CacheKey!, entry, new CacheEntryOptions { TimeToLive = decision.Duration }, cancellationToken)
             .ConfigureAwait(false);
+
+        if (decision.Mode == RequestCacheMode.Similarity && decision.SimilarityRequest is not null)
+        {
+            AddSimilarityIndexEntry(decision, entry);
+        }
     }
 
     /// <summary>
@@ -239,6 +278,7 @@ public sealed class RequestCacheService
 
         var decision = new RequestCacheDecision
         {
+            Mode = policy?.Mode ?? _options.Mode,
             Enabled = policy?.Enabled ?? _options.Enabled,
             Duration = policy?.Duration ?? _options.DefaultDuration,
             CacheableMethods = cacheableMethods,
@@ -252,7 +292,8 @@ public sealed class RequestCacheService
             AllowedResponseContentTypes = allowedResponseContentTypes,
             CacheableStatusCodes = cacheableStatusCodes,
             AllowSetCookieResponses = policy?.AllowSetCookieResponses ?? _options.AllowSetCookieResponses,
-            KeyOptions = keyOptions
+            KeyOptions = keyOptions,
+            SimilarityOptions = _options.Similarity
         };
 
         foreach (var path in _options.IncludedPaths)
@@ -312,9 +353,107 @@ public sealed class RequestCacheService
             return decision;
         }
 
-        decision.CacheKey = await BuildCacheKeyAsync(context, decision, cancellationToken).ConfigureAwait(false);
+        if (decision.Mode == RequestCacheMode.Similarity)
+        {
+            if (!decision.SimilarityOptions.Enabled)
+            {
+                decision.CanCache = false;
+                return decision;
+            }
+
+            decision.SimilarityRequest = await BuildSimilarityRequestAsync(context, decision, cancellationToken).ConfigureAwait(false);
+            decision.CacheKey = decision.SimilarityRequest?.CacheKey;
+        }
+        else
+        {
+            decision.CacheKey = await BuildCacheKeyAsync(context, decision, cancellationToken).ConfigureAwait(false);
+        }
+
         decision.CanCache = decision.CacheKey is not null;
         return decision;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve a cached entry using exact or similarity-based matching.
+    /// </summary>
+    /// <param name="context">The HTTP context.</param>
+    /// <param name="decision">The resolved cache decision settings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The lookup result containing any cached entry and similarity score.</returns>
+    private async Task<SimilarityCacheLookupResult> TryGetCachedEntryAsync(
+        HttpContext context,
+        RequestCacheDecision decision,
+        CancellationToken cancellationToken)
+    {
+        if (decision.CacheKey is null)
+        {
+            return new SimilarityCacheLookupResult(null, null);
+        }
+
+        if (decision.Mode != RequestCacheMode.Similarity)
+        {
+            var entry = await _cache.GetAsync<RequestCacheEntry>(decision.CacheKey, cancellationToken).ConfigureAwait(false);
+            return new SimilarityCacheLookupResult(entry, null);
+        }
+
+        if (decision.SimilarityRequest is null)
+        {
+            return new SimilarityCacheLookupResult(null, null);
+        }
+
+        var exactEntry = await _cache.GetAsync<RequestCacheEntry>(decision.CacheKey, cancellationToken).ConfigureAwait(false);
+        if (exactEntry is not null)
+        {
+            RecordSimilarityObservation(bestScore: 1d, candidates: 0, servedFromCache: true);
+            return new SimilarityCacheLookupResult(exactEntry, 1d);
+        }
+
+        if (!ShouldAttemptSimilarityLookup(context, decision))
+        {
+            RecordSimilarityObservation(bestScore: null, candidates: 0, servedFromCache: false);
+            return new SimilarityCacheLookupResult(null, null);
+        }
+
+        var options = decision.SimilarityOptions;
+        var candidates = _similarityIndex.GetCandidates(decision.SimilarityRequest.Features.Signature, options.MaxCandidates);
+
+        var now = _timeProvider.GetUtcNow();
+        var bestScore = 0d;
+        SimilarityIndexEntry? bestEntry = null;
+
+        foreach (var candidate in candidates)
+        {
+            if (now - candidate.CachedAt > options.MaxEntryAge)
+            {
+                _similarityIndex.Remove(candidate.CacheKey);
+                continue;
+            }
+
+            var score = ScoreSimilarity(decision.SimilarityRequest, candidate);
+            if (score <= bestScore)
+            {
+                continue;
+            }
+
+            bestScore = score;
+            bestEntry = candidate;
+        }
+
+        if (bestEntry is not null && bestScore >= options.MinSimilarity)
+        {
+            var entry = await _cache.GetAsync<RequestCacheEntry>(bestEntry.CacheKey, cancellationToken).ConfigureAwait(false);
+            if (entry is not null)
+            {
+                _similarityIndex.AddOrUpdate(bestEntry);
+                RecordSimilarityObservation(bestScore, candidates.Count, servedFromCache: true);
+                return new SimilarityCacheLookupResult(entry, bestScore);
+            }
+
+            _similarityIndex.Remove(bestEntry.CacheKey);
+        }
+
+        RecordSimilarityObservation(bestScore, candidates.Count, servedFromCache: false);
+        return new SimilarityCacheLookupResult(null, null);
     }
 
     /// <summary>
@@ -433,6 +572,301 @@ public sealed class RequestCacheService
     }
 
     /// <summary>
+    /// Builds similarity request data, including a canonical payload, hash, and signature.
+    /// </summary>
+    /// <param name="context">The HTTP context.</param>
+    /// <param name="decision">The resolved cache decision settings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The similarity request data or <c>null</c> when it cannot be created.</returns>
+    private async Task<SimilarityRequestData?> BuildSimilarityRequestAsync(
+        HttpContext context,
+        RequestCacheDecision decision,
+        CancellationToken cancellationToken)
+    {
+        var payload = await BuildSimilarityPayloadAsync(context, decision, cancellationToken).ConfigureAwait(false);
+        if (payload is null)
+        {
+            return null;
+        }
+
+        if (payload.Length > decision.SimilarityOptions.MaxCanonicalLength)
+        {
+            return null;
+        }
+
+        var hash = _hasher.ComputeHash(payload);
+        var hashPrefix = hash.Length >= sizeof(ulong)
+            ? BinaryPrimitives.ReadUInt64LittleEndian(hash.AsSpan())
+            : 0UL;
+        var cacheKey = $"http:req:sim:{Convert.ToHexString(hash)}";
+
+        var (signature, tokenCount) = _signatureBuilder.BuildSignature(payload, decision.SimilarityOptions.MaxTokens);
+        var features = new SimilarityRequestFeatures(signature, tokenCount, hashPrefix);
+        var embedding = await BuildEmbeddingAsync(payload, decision.SimilarityOptions, cancellationToken).ConfigureAwait(false);
+
+        return new SimilarityRequestData(cacheKey, features, embedding);
+    }
+
+    /// <summary>
+    /// Builds a canonical payload string for similarity evaluation.
+    /// </summary>
+    /// <param name="context">The HTTP context.</param>
+    /// <param name="decision">The cache decision settings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The canonical payload string or <c>null</c> if unavailable.</returns>
+    private async Task<string?> BuildSimilarityPayloadAsync(
+        HttpContext context,
+        RequestCacheDecision decision,
+        CancellationToken cancellationToken)
+    {
+        var request = context.Request;
+        var options = decision.SimilarityOptions.KeyOptions;
+        var builder = new StringBuilder();
+
+        if (options.IncludeMethod)
+        {
+            builder.Append(request.Method);
+        }
+
+        if (options.IncludePath)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append('|');
+            }
+
+            var path = request.Path.Value ?? string.Empty;
+            if (options.NormalizePathToLowercase)
+            {
+                path = path.ToLowerInvariant();
+            }
+
+            builder.Append(path);
+        }
+
+        if (options.IncludeQueryString)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append('|');
+            }
+
+            var queryPairs = request.Query
+                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .SelectMany(pair => pair.Value.Select(value => (pair.Key, Value: value)))
+                .OrderBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
+            var queryBuilder = new StringBuilder();
+            foreach (var (key, value) in queryPairs)
+            {
+                if (queryBuilder.Length > 0)
+                {
+                    queryBuilder.Append('&');
+                }
+
+                queryBuilder.Append(key).Append('=').Append(value);
+            }
+
+            builder.Append(queryBuilder);
+        }
+
+        if (options.IncludeHeaders)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append('|');
+            }
+
+            var headerBuilder = new StringBuilder();
+            foreach (var header in options.VaryByHeaders.OrderBy(h => h, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!request.Headers.TryGetValue(header, out var values))
+                {
+                    continue;
+                }
+
+                if (headerBuilder.Length > 0)
+                {
+                    headerBuilder.Append('&');
+                }
+
+                headerBuilder.Append(header.ToLowerInvariant()).Append('=');
+                headerBuilder.Append(string.Join(',', values.Select(v => v.Trim())));
+            }
+
+            builder.Append(headerBuilder);
+        }
+
+        if (options.IncludeBody)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append('|');
+            }
+
+            var body = await ReadRequestBodyAsync(request, decision.MaxRequestBodySizeBytes, cancellationToken).ConfigureAwait(false);
+            if (body is null)
+            {
+                return null;
+            }
+
+            var canonical = _canonicalizer.Canonicalize(body, request.ContentType);
+            if (canonical is null)
+            {
+                return null;
+            }
+
+            builder.Append(canonical);
+        }
+
+        var payload = builder.ToString();
+        return string.IsNullOrWhiteSpace(payload) ? null : payload;
+    }
+
+    /// <summary>
+    /// Builds an optional embedding for the payload when configured.
+    /// </summary>
+    /// <param name="payload">The canonical payload.</param>
+    /// <param name="options">The similarity cache options.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The embedding vector or <c>null</c> when unavailable.</returns>
+    private async ValueTask<ReadOnlyMemory<float>?> BuildEmbeddingAsync(
+        string payload,
+        SimilarityRequestCacheOptions options,
+        CancellationToken cancellationToken)
+    {
+        if (!options.UseEmbeddingScorer || _embeddingScorer is null)
+        {
+            return null;
+        }
+
+        var embedding = await _embeddingScorer.CreateEmbeddingAsync(payload, cancellationToken).ConfigureAwait(false);
+        if (embedding.IsEmpty)
+        {
+            return null;
+        }
+
+        if (embedding.Length > options.MaxEmbeddingLength)
+        {
+            embedding = embedding.Slice(0, options.MaxEmbeddingLength);
+        }
+
+        return embedding;
+    }
+
+    /// <summary>
+    /// Determines whether similarity lookups should be attempted for the current request.
+    /// </summary>
+    /// <param name="context">The HTTP context.</param>
+    /// <param name="decision">The cache decision settings.</param>
+    /// <returns><c>true</c> if similarity lookup is permitted; otherwise, <c>false</c>.</returns>
+    private static bool ShouldAttemptSimilarityLookup(HttpContext context, RequestCacheDecision decision)
+    {
+        var options = decision.SimilarityOptions;
+        if (!options.Enabled)
+        {
+            return false;
+        }
+
+        if (options.OnlyIfCostly is not null && !options.OnlyIfCostly(context))
+        {
+            return false;
+        }
+
+        if (options.RequiredHeaders.Count > 0
+            && options.RequiredHeaders.Any(header => !context.Request.Headers.ContainsKey(header)))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Scores similarity between the incoming request and a candidate entry.
+    /// </summary>
+    /// <param name="request">The current request data.</param>
+    /// <param name="candidate">The candidate similarity entry.</param>
+    /// <returns>The similarity score.</returns>
+    private double ScoreSimilarity(SimilarityRequestData request, SimilarityIndexEntry candidate)
+    {
+        if (_embeddingScorer is not null
+            && request.Embedding is not null
+            && candidate.Embedding is not null)
+        {
+            return _embeddingScorer.Score(request.Embedding.Value, candidate.Embedding.Value);
+        }
+
+        var features = new SimilarityRequestFeatures(candidate.Signature, candidate.TokenCount, candidate.HashPrefix);
+        return _similarityScorer.Score(request.Features, features);
+    }
+
+    /// <summary>
+    /// Adds a similarity index entry for the cached response.
+    /// </summary>
+    /// <param name="decision">The cache decision settings.</param>
+    /// <param name="entry">The cached response entry.</param>
+    private void AddSimilarityIndexEntry(RequestCacheDecision decision, RequestCacheEntry entry)
+    {
+        if (decision.SimilarityRequest is null)
+        {
+            return;
+        }
+
+        var features = decision.SimilarityRequest.Value.Features;
+        var indexEntry = new SimilarityIndexEntry
+        {
+            CacheKey = decision.CacheKey!,
+            Signature = features.Signature,
+            TokenCount = features.TokenCount,
+            HashPrefix = features.HashPrefix,
+            CachedAt = entry.CachedAt,
+            Embedding = decision.SimilarityRequest.Value.Embedding
+        };
+
+        _similarityIndex.AddOrUpdate(indexEntry);
+    }
+
+    /// <summary>
+    /// Records similarity cache telemetry and activity tags.
+    /// </summary>
+    /// <param name="bestScore">The best similarity score achieved.</param>
+    /// <param name="candidates">The number of candidates scored.</param>
+    /// <param name="servedFromCache">Whether a cached response was served.</param>
+    private static void RecordSimilarityObservation(double? bestScore, int candidates, bool servedFromCache)
+    {
+        if (servedFromCache)
+        {
+            SimilarityCacheHitTotal.Add(1);
+        }
+        else
+        {
+            SimilarityCacheMissTotal.Add(1);
+        }
+
+        if (candidates > 0)
+        {
+            SimilarityCandidatesCount.Add(candidates);
+        }
+
+        if (bestScore.HasValue)
+        {
+            SimilarityBestScoreHistogram.Record(bestScore.Value);
+        }
+
+        var activity = Activity.Current;
+        if (activity is not null)
+        {
+            activity.SetTag("mode", "similarity");
+            activity.SetTag("served_from_cache", servedFromCache);
+            if (bestScore.HasValue)
+            {
+                activity.SetTag("best_score", bestScore.Value);
+            }
+        }
+    }
+
+    /// <summary>
     /// Computes a SHA-256 hash of the request body up to a configured size limit.
     /// </summary>
     /// <param name="request">The HTTP request.</param>
@@ -473,6 +907,54 @@ public sealed class RequestCacheService
         request.Body.Position = 0;
 
         return Convert.ToHexString(sha.Hash ?? Array.Empty<byte>());
+    }
+
+    /// <summary>
+    /// Reads the request body as a UTF-8 string up to a configured size limit.
+    /// </summary>
+    /// <param name="request">The HTTP request.</param>
+    /// <param name="maxBytes">The maximum number of bytes to read.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The request body string or <c>null</c> when the limit is exceeded.</returns>
+    private static async Task<string?> ReadRequestBodyAsync(
+        HttpRequest request,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
+        if (request.Body is null || !request.Body.CanRead)
+        {
+            return string.Empty;
+        }
+
+        request.EnableBuffering();
+        request.Body.Position = 0;
+
+        var buffer = ArrayPool<byte>.Shared.Rent(8192);
+        long totalRead = 0;
+
+        try
+        {
+            using var stream = new MemoryStream();
+            int read;
+            while ((read = await request.Body.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                totalRead += read;
+                if (totalRead > maxBytes)
+                {
+                    request.Body.Position = 0;
+                    return null;
+                }
+
+                stream.Write(buffer, 0, read);
+            }
+
+            request.Body.Position = 0;
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>
@@ -596,7 +1078,11 @@ public sealed class RequestCacheService
     /// <param name="context">The HTTP context.</param>
     /// <param name="entry">The cached response entry.</param>
     /// <param name="decision">The resolved cache decision settings.</param>
-    private void ApplyCachedResponse(HttpContext context, RequestCacheEntry entry, RequestCacheDecision decision)
+    private void ApplyCachedResponse(
+        HttpContext context,
+        RequestCacheEntry entry,
+        RequestCacheDecision decision,
+        double? similarityScore)
     {
         if (context.Response.HasStarted)
         {
@@ -617,7 +1103,7 @@ public sealed class RequestCacheService
 
         var isStale = _timeProvider.GetUtcNow() > entry.CachedAt.Add(entry.Duration);
         EnsureMetadataWriter(context);
-        EmitMetadata(context, isHit: true, isStale, decision.CacheKey!, entry.CachedAt, entry.Duration);
+        EmitMetadata(context, isHit: true, isStale, decision.CacheKey!, entry.CachedAt, entry.Duration, similarityScore);
 
         if (!HttpMethods.IsHead(context.Request.Method))
         {
@@ -641,12 +1127,13 @@ public sealed class RequestCacheService
         bool isStale,
         string cacheKey,
         DateTimeOffset? cachedAt,
-        TimeSpan duration)
+        TimeSpan duration,
+        double? similarityScore)
     {
         context.Items[RequestCacheMetadataAccessor.ItemKey] = new RequestCacheMetadata(
             isHit,
             isStale,
-            null,
+            similarityScore,
             cacheKey,
             cachedAt ?? _timeProvider.GetUtcNow(),
             duration);
@@ -707,10 +1194,28 @@ public sealed class RequestCacheService
     }
 
     /// <summary>
+    /// Represents the computed similarity data for a request.
+    /// </summary>
+    private readonly record struct SimilarityRequestData(
+        string CacheKey,
+        SimilarityRequestFeatures Features,
+        ReadOnlyMemory<float>? Embedding);
+
+    /// <summary>
+    /// Represents the result of a cache lookup.
+    /// </summary>
+    private readonly record struct SimilarityCacheLookupResult(RequestCacheEntry? Entry, double? SimilarityScore);
+
+    /// <summary>
     /// Represents the resolved cache decision settings for a single request.
     /// </summary>
     private sealed class RequestCacheDecision
     {
+        /// <summary>
+        /// Gets or sets the request cache mode.
+        /// </summary>
+        public RequestCacheMode Mode { get; set; }
+
         /// <summary>
         /// Gets or sets a value indicating whether request caching is enabled.
         /// </summary>
@@ -725,6 +1230,11 @@ public sealed class RequestCacheService
         /// Gets or sets the cache key derived from the request.
         /// </summary>
         public string? CacheKey { get; set; }
+
+        /// <summary>
+        /// Gets or sets the computed similarity data for the request.
+        /// </summary>
+        public SimilarityRequestData? SimilarityRequest { get; set; }
 
         /// <summary>
         /// Gets or sets the duration for cached responses.
@@ -800,5 +1310,10 @@ public sealed class RequestCacheService
         /// Gets or sets the cache key composition settings.
         /// </summary>
         public RequestCacheKeyOptions KeyOptions { get; set; } = new();
+
+        /// <summary>
+        /// Gets or sets similarity cache options.
+        /// </summary>
+        public SimilarityRequestCacheOptions SimilarityOptions { get; set; } = new();
     }
 }

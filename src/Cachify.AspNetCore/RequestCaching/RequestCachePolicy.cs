@@ -6,6 +6,11 @@ namespace Cachify.AspNetCore;
 public sealed class RequestCachePolicy
 {
     /// <summary>
+    /// Gets or sets the request caching mode for the scope.
+    /// </summary>
+    public RequestCacheMode? Mode { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether caching is enabled for the scope.
     /// </summary>
     public bool? Enabled { get; set; }
