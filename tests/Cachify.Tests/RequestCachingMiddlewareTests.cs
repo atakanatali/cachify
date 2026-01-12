@@ -67,6 +67,33 @@ public sealed class RequestCachingMiddlewareTests
         secondText.Should().Be(firstText);
     }
 
+    [Fact]
+    public async Task SimilarRequestsCanBeServedFromCache()
+    {
+        using var server = CreateServer(options =>
+        {
+            options.Mode = RequestCacheMode.Similarity;
+            options.CacheableMethods.Add("POST");
+            options.Similarity.Enabled = true;
+            options.Similarity.MinSimilarity = 0.9;
+        });
+
+        using var client = server.CreateClient();
+
+        var firstPayload = new { prompt = "hello world", id = "1" };
+        var secondPayload = new { prompt = "hello world", id = "2" };
+
+        var first = await client.PostAsJsonAsync("/data", firstPayload);
+        var second = await client.PostAsJsonAsync("/data", secondPayload);
+
+        var firstText = await first.Content.ReadAsStringAsync();
+        var secondText = await second.Content.ReadAsStringAsync();
+
+        second.Headers.GetValues("X-Cachify-Cache").Single().Should().Be("HIT");
+        second.Headers.Contains("X-Cachify-Cache-Similarity").Should().BeTrue();
+        secondText.Should().Be(firstText);
+    }
+
     private static TestServer CreateServer(Action<RequestCacheOptions>? configure = null)
     {
         var builder = new WebHostBuilder()

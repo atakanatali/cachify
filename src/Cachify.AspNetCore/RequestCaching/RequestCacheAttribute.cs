@@ -11,6 +11,11 @@ namespace Cachify.AspNetCore;
 public sealed class RequestCacheAttribute : Attribute, IEndpointMetadataProvider
 {
     /// <summary>
+    /// Gets or sets the request cache mode for the endpoint.
+    /// </summary>
+    public RequestCacheMode Mode { get; set; } = RequestCacheMode.Exact;
+
+    /// <summary>
     /// Gets or sets the cache duration in seconds.
     /// </summary>
     public int DurationSeconds { get; set; } = 30;
@@ -51,6 +56,7 @@ public sealed class RequestCacheAttribute : Attribute, IEndpointMetadataProvider
     {
         return new RequestCachePolicy
         {
+            Mode = Mode,
             Duration = TimeSpan.FromSeconds(DurationSeconds),
             IncludeRequestBody = IncludeRequestBody,
             VaryByHeaders = VaryByHeaders,

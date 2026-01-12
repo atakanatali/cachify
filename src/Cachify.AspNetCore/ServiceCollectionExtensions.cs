@@ -81,6 +81,11 @@ public static class ServiceCollectionExtensions
             services.Configure(configure);
         }
 
+        services.AddSingleton<IRequestCanonicalizer, JsonRequestCanonicalizer>();
+        services.AddSingleton<IRequestHasher, Sha256RequestHasher>();
+        services.AddSingleton<SimHashSignatureBuilder>();
+        services.AddSingleton<ISimilarityScorer, SimHashSimilarityScorer>();
+        services.AddSingleton<ISimilarityRequestIndex, SimilarityRequestIndex>();
         services.AddSingleton<RequestCacheService>();
         return services;
     }

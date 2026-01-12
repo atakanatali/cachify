@@ -8,6 +8,11 @@ namespace Cachify.AspNetCore;
 public sealed class RequestCacheOptions
 {
     /// <summary>
+    /// Gets or sets the request caching mode.
+    /// </summary>
+    public RequestCacheMode Mode { get; set; } = RequestCacheMode.Exact;
+
+    /// <summary>
     /// Gets or sets a value indicating whether request caching is enabled.
     /// </summary>
     public bool Enabled { get; set; } = true;
@@ -95,4 +100,9 @@ public sealed class RequestCacheOptions
     /// Gets header emission settings for cache metadata.
     /// </summary>
     public RequestCacheHeaderOptions ResponseHeaders { get; } = new();
+
+    /// <summary>
+    /// Gets similarity caching configuration.
+    /// </summary>
+    public SimilarityRequestCacheOptions Similarity { get; } = new();
 }

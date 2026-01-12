@@ -104,6 +104,7 @@ By default, request caching emits response headers to indicate cache hits/misses
 
 - `X-Cachify-Cache`: `HIT` or `MISS`
 - `X-Cachify-Cache-Stale`: `true` or `false`
+- `X-Cachify-Cache-Similarity`: similarity score when similarity caching is used
 
 Use `RequestCacheMetadataAccessor.TryGetMetadata` to access the same information programmatically when needed.
 
@@ -112,6 +113,67 @@ Use `RequestCacheMetadataAccessor.TryGetMetadata` to access the same information
 - Requests with `Authorization` headers are not cached unless `CacheAuthenticatedResponses` is enabled.
 - `Cache-Control: no-store`, `no-cache`, or `private` prevents caching by default.
 - `Set-Cookie` responses are excluded by default unless explicitly enabled.
+
+## Similarity request caching (LLM MVP)
+
+Similarity request caching allows near-duplicate LLM calls to reuse cached responses without storing full payloads.
+It is optional and disabled by default; core caching users do not pay the cost unless `Mode` is set to `Similarity`.
+
+### How it works
+
+1. **Canonicalization**: request payloads are normalized (stable JSON ordering + noise field removal).
+2. **Hashing**: a stable SHA-256 hash is computed for exact cache storage.
+3. **Signature**: a compact 64-bit SimHash signature is generated for similarity scoring.
+4. **Indexing**: signatures are placed into LSH-style buckets (four 16-bit bands) to shortlist candidates.
+5. **Scoring**: candidates are scored using a pluggable similarity scorer (default SimHash Hamming similarity).
+
+### Trade-offs
+
+- Similarity caching trades strict correctness for speed and reuse of near-duplicate prompts.
+- SimHash is cheap and compact, but may miss semantically similar prompts without explicit overlap.
+- Embedding-based scorers can improve quality but increase memory usage; they are opt-in.
+
+### Privacy and security notes
+
+- Payloads are not stored raw in the index; only compact signatures, hash prefixes, and cache keys are retained.
+- Size limits (`MaxRequestBodySizeBytes`, `MaxCanonicalLength`) prevent large payload retention.
+- Configure `IgnoredJsonFields` to remove sensitive or noisy fields from canonicalization.
+
+### Recommended defaults
+
+- `MinSimilarity`: `0.95`
+- `MaxEntryAge`: `10 minutes`
+- `MaxIndexEntries`: `1024`
+- `MaxCandidates`: `64`
+
+### Example: LLM request payload similarity
+
+```csharp
+builder.Services.AddRequestCaching(options =>
+{
+    options.Mode = RequestCacheMode.Similarity;
+    options.CacheableMethods.Add(HttpMethods.Post);
+    options.Similarity.Enabled = true;
+    options.Similarity.MinSimilarity = 0.95;
+});
+
+app.MapPost("/llm", async (HttpContext context) =>
+{
+    // Simulated LLM response
+    await context.Response.WriteAsync($"response:{DateTimeOffset.UtcNow:O}");
+});
+```
+
+```json
+// First request (cached)
+{"prompt":"Summarize the release notes","id":"abc123"}
+
+// Second request (served from cache, id ignored)
+{"prompt":"Summarize the release notes","id":"def456"}
+```
+
+The second request will be served from cache when the similarity score meets the threshold. The response will
+include `X-Cachify-Cache-Similarity` to expose the score used for the decision.
 
 ## Configuration
 
@@ -129,8 +191,10 @@ Cachify emits metrics and traces:
 - Meter name: `Cachify`
 - Counters: `cache_hit_total`, `cache_miss_total`, `cache_set_total`, `cache_remove_total`
 - Counters: `cache_backplane_invalidation_published_total`, `cache_backplane_invalidation_received_total`
+- Counters: `similarity_cache_hit`, `similarity_cache_miss`, `similarity_candidates_count`
 - Counters: `stale_served_count`, `factory_timeout_soft_count`, `factory_timeout_hard_count`, `failsafe_used_count`
 - Histogram: `cache_get_duration_ms`
+- Histogram: `similarity_best_score_histogram`
 - Activity source: `Cachify`
 
 ## Backplane invalidation (optional)
