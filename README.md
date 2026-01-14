@@ -1,6 +1,6 @@
 # Cachify
 
-<img width="256" height="256" alt="Image" src="https://github.com/user-attachments/assets/3b8a48ed-b313-4a01-b6a5-0514a942fd6a" />
+<img width="512" height="512" alt="Image" src="https://github.com/user-attachments/assets/8e5d4f11-0195-4b1e-8ac7-2f1b301dd2a3" />
 
 Cachify is a modular caching stack for .NET that supports layered L1/L2 caching with a minimal API and strong defaults.
 
