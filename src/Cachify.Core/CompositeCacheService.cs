@@ -151,7 +151,7 @@ public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
             return firstRead.Value!;
         }
 
-        var staleCandidate = firstRead.IsStale ? firstRead : null;
+        var staleCandidate = firstRead.IsStale ? (CacheEntryReadResult<T>?)firstRead : null;
         var refreshTask = GetOrAddRefreshTask(cacheKey, factory, resolvedOptions, resilience, allowBackground: staleCandidate is not null, cancellationToken);
 
         if (staleCandidate is not null && resilience.SoftTimeout is not null)
@@ -163,7 +163,7 @@ public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
                 var refreshScheduled = resilience.EnableBackgroundRefresh && !cancellationToken.IsCancellationRequested;
                 RecordStale(activity, CacheEntryStaleReason.SoftTimeout, refreshScheduled);
                 ScheduleRefresh(cacheKey, factory, resolvedOptions, resilience, cancellationToken);
-                return staleCandidate.Value!;
+                return staleCandidate.GetValueOrDefault().Value!;
             }
 
             return softTimeoutResult.Result!;
@@ -179,7 +179,7 @@ public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
             var refreshScheduled = resilience.EnableBackgroundRefresh && !cancellationToken.IsCancellationRequested;
             RecordStale(activity, CacheEntryStaleReason.HardTimeout, refreshScheduled);
             ScheduleRefresh(cacheKey, factory, resolvedOptions, resilience, cancellationToken);
-            return staleCandidate.Value!;
+            return staleCandidate.GetValueOrDefault().Value!;
         }
         catch (TimeoutException)
         {
@@ -192,7 +192,7 @@ public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
             var refreshScheduled = resilience.EnableBackgroundRefresh && !cancellationToken.IsCancellationRequested;
             RecordStale(activity, CacheEntryStaleReason.FactoryFailure, refreshScheduled);
             ScheduleRefresh(cacheKey, factory, resolvedOptions, resilience, cancellationToken);
-            return staleCandidate.Value!;
+            return staleCandidate.GetValueOrDefault().Value!;
         }
     }
 
@@ -216,7 +216,7 @@ public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
 
         if (_memory is not null)
         {
-            var memoryResult = await TryReadEntryAsync(_memory, cacheKey, cancellationToken).ConfigureAwait(false);
+            var memoryResult = await TryReadEntryAsync<T>(_memory, cacheKey, cancellationToken).ConfigureAwait(false);
             if (memoryResult.IsFresh)
             {
                 RecordHit("L1");
@@ -234,7 +234,7 @@ public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
         {
             try
             {
-                var distributedResult = await TryReadEntryAsync(_distributed, cacheKey, cancellationToken).ConfigureAwait(false);
+                var distributedResult = await TryReadEntryAsync<T>(_distributed, cacheKey, cancellationToken).ConfigureAwait(false);
                 if (distributedResult.IsFresh)
                 {
                     RecordHit("L2");
@@ -629,7 +629,7 @@ public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
 
             refreshTask.ContinueWith(_ =>
             {
-                _refreshTasks.TryRemove(cacheKey, out _);
+                _refreshTasks.TryRemove(cacheKey, out var _);
             }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
             return refreshTask;
@@ -651,7 +651,7 @@ public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
             return (false, await task.ConfigureAwait(false));
         }
 
-        using var delayCts = _timeProvider.CreateCancellationTokenSource(softTimeout);
+        using var delayCts = new CancellationTokenSource(softTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(delayCts.Token, cancellationToken);
         var delayTask = Task.Delay(Timeout.InfiniteTimeSpan, linkedCts.Token);
 
@@ -679,7 +679,7 @@ public sealed class CompositeCacheService : ICompositeCacheService, IDisposable
             return new HardTimeoutScope(cancellationToken, null, null, null);
         }
 
-        var timeoutCts = _timeProvider.CreateCancellationTokenSource(resilience.HardTimeout.Value);
+        var timeoutCts = new CancellationTokenSource(resilience.HardTimeout.Value);
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
         var timeoutTask = Task.Delay(Timeout.InfiniteTimeSpan, timeoutCts.Token);
         return new HardTimeoutScope(linkedCts.Token, timeoutCts, linkedCts, timeoutTask);

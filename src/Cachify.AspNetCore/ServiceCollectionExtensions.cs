@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
         var builderOptions = new CachifyBuilderOptions();
         configure(builderOptions);
 
-        services.AddSingleton<CachifyOptions>(builderOptions);
+        services.AddSingleton<CachifyOptions>(builderOptions.CoreOptions);
         services.AddSingleton<ICacheSerializer, JsonCacheSerializer>();
         services.AddSingleton<ICacheKeyBuilder, DefaultCacheKeyBuilder>();
         services.AddSingleton<CacheStampedeGuard>();

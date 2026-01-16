@@ -43,6 +43,6 @@ public sealed class RequestCachingMiddleware
             _logger.LogDebug("Request cache policy found for {Path}", context.Request.Path);
         }
 
-        await _service.ExecuteAsync(context, policy, _next, context.RequestAborted).ConfigureAwait(false);
+        await _service.ExecuteAsync(context, policy, ct => _next(context), context.RequestAborted).ConfigureAwait(false);
     }
 }

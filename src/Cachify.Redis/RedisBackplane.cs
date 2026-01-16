@@ -163,7 +163,7 @@ public sealed class RedisBackplane : ICacheBackplane, IAsyncDisposable
 
         try
         {
-            await _subscriber.PublishAsync(_options.ChannelName, message.Serialize()).ConfigureAwait(false);
+            await _subscriber.PublishAsync(RedisChannel.Literal(_options.ChannelName), message.Serialize()).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -186,7 +186,7 @@ public sealed class RedisBackplane : ICacheBackplane, IAsyncDisposable
                 return;
             }
 
-            await _subscriber.SubscribeAsync(_options.ChannelName, HandleMessageAsync).ConfigureAwait(false);
+            await _subscriber.SubscribeAsync(RedisChannel.Literal(_options.ChannelName), HandleMessageAsync).ConfigureAwait(false);
             _isSubscribed = 1;
         }
         catch (Exception ex)
