@@ -76,7 +76,7 @@ public sealed class RedisCacheService : IDistributedCacheService, ISingleCacheSe
     }
 
     /// <inheritdoc />
-    public async Task<T> GetOrSetAsync(
+    public async Task<T> GetOrSetAsync<T>(
         string key,
         Func<CancellationToken, Task<T>> factory,
         CacheEntryOptions? options = null,

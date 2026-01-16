@@ -415,7 +415,8 @@ public sealed class RequestCacheService
         }
 
         var options = decision.SimilarityOptions;
-        var candidates = _similarityIndex.GetCandidates(decision.SimilarityRequest.Features.Signature, options.MaxCandidates);
+        var similarityRequest = decision.SimilarityRequest ?? throw new InvalidOperationException("SimilarityRequest is required when attempting similarity lookup");
+        var candidates = _similarityIndex.GetCandidates(similarityRequest.Features.Signature, options.MaxCandidates);
 
         var now = _timeProvider.GetUtcNow();
         var bestScore = 0d;
@@ -429,7 +430,7 @@ public sealed class RequestCacheService
                 continue;
             }
 
-            var score = ScoreSimilarity(decision.SimilarityRequest, candidate);
+            var score = ScoreSimilarity(decision.SimilarityRequest.GetValueOrDefault(), candidate);
             if (score <= bestScore)
             {
                 continue;
@@ -538,8 +539,8 @@ public sealed class RequestCacheService
                     headerBuilder.Append('&');
                 }
 
-                headerBuilder.Append(header.ToLowerInvariant()).Append('=');
-                headerBuilder.Append(string.Join(',', values.Select(v => v.Trim())));
+                headerBuilder.Append(header!.ToLowerInvariant()).Append('=');
+                headerBuilder.Append(string.Join(',', values!.Where(v => v is not null).Select(v => v!.Trim()!)));
             }
 
             builder.Append(headerBuilder);
@@ -690,8 +691,8 @@ public sealed class RequestCacheService
                     headerBuilder.Append('&');
                 }
 
-                headerBuilder.Append(header.ToLowerInvariant()).Append('=');
-                headerBuilder.Append(string.Join(',', values.Select(v => v.Trim())));
+                headerBuilder.Append(header!.ToLowerInvariant()).Append('=');
+                headerBuilder.Append(string.Join(',', values!.Where(v => v is not null).Select(v => v!.Trim()!)));
             }
 
             builder.Append(headerBuilder);
@@ -1058,7 +1059,7 @@ public sealed class RequestCacheService
                 continue;
             }
 
-            headers[header.Key] = header.Value.ToArray();
+            headers[header.Key] = header.Value.ToArray()!;
         }
 
         return new RequestCacheEntry
@@ -1151,6 +1152,7 @@ public sealed class RequestCacheService
             return;
         }
 
+        var responseHeaders = headers;
         context.Items[MetadataWriterItemKey] = true;
         context.Response.OnStarting(() =>
         {
@@ -1159,17 +1161,21 @@ public sealed class RequestCacheService
                 return Task.CompletedTask;
             }
 
-            context.Response.Headers[headers.CacheStatusHeader] = metadata.IsHit ? "HIT" : "MISS";
-            context.Response.Headers[headers.CacheStaleHeader] = metadata.IsStale ? "true" : "false";
+            var cacheStatusHeader = responseHeaders!.CacheStatusHeader ?? throw new InvalidOperationException("CacheStatusHeader is required");
+            var cacheStaleHeader = responseHeaders.CacheStaleHeader ?? throw new InvalidOperationException("CacheStaleHeader is required");
+            context.Response.Headers[cacheStatusHeader] = metadata!.IsHit ? "HIT" : "MISS";
+            context.Response.Headers[cacheStaleHeader] = metadata!.IsStale ? "true" : "false";
 
-            if (metadata.SimilarityScore is not null)
+            if (metadata!.SimilarityScore is not null)
             {
-                context.Response.Headers[headers.SimilarityHeader] = metadata.SimilarityScore.Value.ToString("F3", CultureInfo.InvariantCulture);
+                var similarityHeader = responseHeaders.SimilarityHeader ?? throw new InvalidOperationException("SimilarityHeader is required");
+                context.Response.Headers[similarityHeader] = metadata!.SimilarityScore.Value.ToString("F3", CultureInfo.InvariantCulture);
             }
 
-            if (headers.IncludeCacheKey)
+            if (responseHeaders.IncludeCacheKey)
             {
-                context.Response.Headers[headers.CacheKeyHeader] = metadata.CacheKey;
+                var cacheKeyHeader = responseHeaders.CacheKeyHeader ?? throw new InvalidOperationException("CacheKeyHeader is required");
+                context.Response.Headers[cacheKeyHeader] = metadata!.CacheKey;
             }
 
             return Task.CompletedTask;

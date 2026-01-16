@@ -18,45 +18,22 @@ public sealed class SimHashSignatureBuilder
         var tokenBuffer = new char[64];
         var tokenLength = 0;
 
-        void ProcessToken()
-        {
-            if (tokenLength == 0 || tokenCount >= maxTokens)
-            {
-                tokenLength = 0;
-                return;
-            }
-
-            var hash = HashToken(tokenBuffer.AsSpan(0, tokenLength));
-            for (var bit = 0; bit < 64; bit++)
-            {
-                if (((hash >> bit) & 1UL) == 1UL)
-                {
-                    weights[bit]++;
-                }
-                else
-                {
-                    weights[bit]--;
-                }
-            }
-
-            tokenCount++;
-            tokenLength = 0;
-        }
-
         foreach (var character in canonicalPayload)
         {
             if (char.IsLetterOrDigit(character))
             {
                 if (tokenLength == tokenBuffer.Length)
                 {
-                    ProcessToken();
+                    tokenCount = ProcessToken(weights, tokenBuffer, tokenLength, tokenCount, maxTokens);
+                    tokenLength = 0;
                 }
 
                 tokenBuffer[tokenLength++] = char.ToLowerInvariant(character);
             }
             else
             {
-                ProcessToken();
+                tokenCount = ProcessToken(weights, tokenBuffer, tokenLength, tokenCount, maxTokens);
+                tokenLength = 0;
                 if (tokenCount >= maxTokens)
                 {
                     break;
@@ -64,7 +41,7 @@ public sealed class SimHashSignatureBuilder
             }
         }
 
-        ProcessToken();
+        tokenCount = ProcessToken(weights, tokenBuffer, tokenLength, tokenCount, maxTokens);
 
         ulong signature = 0;
         for (var bit = 0; bit < 64; bit++)
@@ -76,6 +53,29 @@ public sealed class SimHashSignatureBuilder
         }
 
         return (signature, tokenCount);
+    }
+
+    private static int ProcessToken(Span<int> weights, char[] tokenBuffer, int tokenLength, int tokenCount, int maxTokens)
+    {
+        if (tokenLength == 0 || tokenCount >= maxTokens)
+        {
+            return tokenCount;
+        }
+
+        var hash = HashToken(tokenBuffer.AsSpan(0, tokenLength));
+        for (var bit = 0; bit < 64; bit++)
+        {
+            if (((hash >> bit) & 1UL) == 1UL)
+            {
+                weights[bit]++;
+            }
+            else
+            {
+                weights[bit]--;
+            }
+        }
+
+        return tokenCount + 1;
     }
 
     /// <summary>

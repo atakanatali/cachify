@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Cachify.Tests;
 
@@ -28,22 +29,12 @@ internal sealed class ManualTimeProvider : TimeProvider
         }
     }
 
-    public override DateTimeOffset GetLocalNow()
-    {
-        return GetUtcNow().ToLocalTime();
-    }
-
     public override long GetTimestamp()
     {
         lock (_lock)
         {
             return _timestamp;
         }
-    }
-
-    public override TimeSpan GetElapsedTime(long startingTimestamp)
-    {
-        return TimeSpan.FromTicks(GetTimestamp() - startingTimestamp);
     }
 
     public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
@@ -87,7 +78,7 @@ internal sealed class ManualTimeProvider : TimeProvider
         }
     }
 
-    private sealed class ManualTimer : ITimer
+    private sealed class ManualTimer : ITimer, IAsyncDisposable
     {
         private readonly ManualTimeProvider _provider;
         private readonly TimerCallback _callback;
@@ -126,6 +117,12 @@ internal sealed class ManualTimeProvider : TimeProvider
         public void Dispose()
         {
             _disposed = true;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return default;
         }
 
         public bool TryFire(DateTimeOffset nowUtc, List<(TimerCallback Callback, object? State)> callbacks)

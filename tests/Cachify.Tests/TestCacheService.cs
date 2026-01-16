@@ -81,7 +81,7 @@ internal sealed class TestCacheService : IMemoryCacheService, IDistributedCacheS
     }
 
     /// <inheritdoc />
-    public async Task<T> GetOrSetAsync(
+    public async Task<T> GetOrSetAsync<T>(
         string key,
         Func<CancellationToken, Task<T>> factory,
         CacheEntryOptions? options = null,
