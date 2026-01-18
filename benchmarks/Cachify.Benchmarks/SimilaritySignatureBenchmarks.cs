@@ -1,7 +1,7 @@
 using BenchmarkDotNet.Attributes;
 using Cachify.AspNetCore;
 
-namespace Cachify.Tests;
+namespace Cachify.Benchmarks;
 
 /// <summary>
 /// Benchmarks SimHash signature generation for canonical payloads.

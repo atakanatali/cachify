@@ -21,7 +21,7 @@ public sealed class RedisBackplaneMessageTests
 
         results.Should().ContainSingle(result =>
             result.Key == "user:1" &&
-            result.Tag is null &&
+            result.Tag == null &&
             result.SourceId == "node-a");
     }
 

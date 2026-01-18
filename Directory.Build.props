@@ -4,23 +4,35 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <TargetFramework>net9.0</TargetFramework>
 
-    <Authors>YOUR_NAME</Authors>
+    <Authors>Atakan Atali</Authors>
     <Company>Cachify</Company>
+    <Copyright>Copyright © Atakan Atali 2024-2026</Copyright>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/YOUR_GH/Cachify</RepositoryUrl>
+    <RepositoryUrl>https://github.com/atakanatali/Cachify</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/YOUR_GH/Cachify</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/atakanatali/Cachify</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>cache;redis;memcached;memory;hybrid;dotnet</PackageTags>
+    <PackageTags>cache;redis;memcached;memory;hybrid;dotnet;caching;l1;l2;layered;similarity</PackageTags>
+    <Description>A modular caching stack for .NET that supports layered L1/L2 caching with minimal API and strong defaults.</Description>
 
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageIcon>icon.png</PackageIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\\..\\README.md" Pack="true" PackagePath="\\" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- SourceLink for debugging -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
   </ItemGroup>
 </Project>
