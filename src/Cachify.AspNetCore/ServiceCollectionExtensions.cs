@@ -5,6 +5,7 @@ using Cachify.Redis;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 namespace Cachify.AspNetCore;
@@ -86,7 +87,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SimHashSignatureBuilder>();
         services.AddSingleton<ISimilarityScorer, SimHashSimilarityScorer>();
         services.AddSingleton<ISimilarityRequestIndex, SimilarityRequestIndex>();
-        services.AddSingleton<RequestCacheService>();
+        services.AddSingleton<IRequestCacheKeyBuilder, RequestCacheKeyBuilder>();
+        services.AddSingleton<ISimilarityRequestHandler, SimilarityRequestHandler>();
+        services.AddSingleton<IRequestCachePolicyEvaluator, RequestCachePolicyEvaluator>();
+        services.AddSingleton(sp => new RequestCacheService(
+            sp.GetRequiredService<ICacheService>(),
+            sp.GetRequiredService<IOptions<RequestCacheOptions>>(),
+            sp.GetRequiredService<ILogger<RequestCacheService>>(),
+            sp.GetRequiredService<IRequestCachePolicyEvaluator>(),
+            sp.GetRequiredService<ISimilarityRequestHandler>(),
+            sp.GetService<TimeProvider>()
+        ));
         return services;
     }
 }
