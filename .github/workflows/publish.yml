@@ -1,4 +1,4 @@
-name: 📦 Publish to NuGet
+name: Publish to NuGet
 
 on:
   workflow_dispatch:
@@ -19,13 +19,13 @@ env:
 
 jobs:
   publish:
-    name: 🚀 Build & Publish
+    name: Build & Publish
     if: github.repository_owner == 'atakanatali'
     runs-on: ubuntu-latest
     environment: nuget-prod
 
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -35,7 +35,7 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
-      - name: 📋 Set Version
+      - name: Set Version
         id: version
         run: |
           VERSION="${{ github.event.inputs.version }}"
@@ -43,9 +43,9 @@ jobs:
             VERSION="${VERSION}-preview"
           fi
           echo "PACKAGE_VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          echo "📦 Package version: ${VERSION}"
+          echo "Package version: ${VERSION}"
 
-      - name: 📦 Restore
+      - name: Restore
         run: dotnet restore
 
       - name: 🔨 Build
@@ -54,10 +54,10 @@ jobs:
             /p:Version=${{ steps.version.outputs.PACKAGE_VERSION }} \
             /p:PackageVersion=${{ steps.version.outputs.PACKAGE_VERSION }}
 
-      - name: 🧪 Test
+      - name: Test
         run: dotnet test -c Release --no-build --verbosity normal
 
-      - name: 📦 Pack
+      - name: Pack
         run: |
           dotnet pack -c Release --no-build \
             /p:Version=${{ steps.version.outputs.PACKAGE_VERSION }} \
@@ -67,7 +67,7 @@ jobs:
       - name: 📋 List Packages
         run: ls -la ./nupkgs
 
-      - name: 🚀 Push to NuGet
+      - name: Push to NuGet
         run: |
           for package in ./nupkgs/*.nupkg; do
             echo "Publishing: $package"
@@ -77,20 +77,20 @@ jobs:
               --skip-duplicate
           done
 
-      - name: 🏷️ Create Git Tag
+      - name: Create Git Tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ steps.version.outputs.PACKAGE_VERSION }}" -m "Release v${{ steps.version.outputs.PACKAGE_VERSION }}"
           git push origin "v${{ steps.version.outputs.PACKAGE_VERSION }}"
 
-      - name: 📝 Create Release
+      - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.PACKAGE_VERSION }}
           name: Cachify v${{ steps.version.outputs.PACKAGE_VERSION }}
           body: |
-            ## 📦 Cachify v${{ steps.version.outputs.PACKAGE_VERSION }}
+            ## Cachify v${{ steps.version.outputs.PACKAGE_VERSION }}
             
             ### Packages Published
             - `Cachify.Abstractions` - Interfaces and core models
