@@ -1,4 +1,0 @@
-/.github/workflows/* @YOUR_GITHUB_USERNAME
-/Directory.Build.props @YOUR_GITHUB_USERNAME
-/Directory.Build.targets @YOUR_GITHUB_USERNAME
-/Directory.Packages.props @YOUR_GITHUB_USERNAME
