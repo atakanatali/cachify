@@ -1,7 +1,7 @@
 # Cachify
 
 <p align="center">
-  <img width="180" height="180" alt="Cachify Logo" src="https://github.com/user-attachments/assets/8e5d4f11-0195-4b1e-8ac7-2f1b301dd2a3" />
+  <img width="456" height="456" alt="Cachify Logo" src="https://github.com/user-attachments/assets/b7f383bf-0757-423c-9138-236447ca3211" />
 </p>
 
 <p align="center">
