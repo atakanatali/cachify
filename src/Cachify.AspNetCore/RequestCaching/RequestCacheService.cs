@@ -112,7 +112,7 @@ public sealed class RequestCacheService
         var lookup = await TryGetCachedEntryAsync(context, decision, cancellationToken).ConfigureAwait(false);
         if (lookup.Entry is not null)
         {
-            ApplyCachedResponse(context, lookup.Entry, decision, lookup.SimilarityScore);
+            await ApplyCachedResponseAsync(context, lookup.Entry, decision, lookup.SimilarityScore, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -1079,11 +1079,13 @@ public sealed class RequestCacheService
     /// <param name="context">The HTTP context.</param>
     /// <param name="entry">The cached response entry.</param>
     /// <param name="decision">The resolved cache decision settings.</param>
-    private void ApplyCachedResponse(
+    /// <param name="cancellationToken">The cancellation token.</param>
+    private async Task ApplyCachedResponseAsync(
         HttpContext context,
         RequestCacheEntry entry,
         RequestCacheDecision decision,
-        double? similarityScore)
+        double? similarityScore,
+        CancellationToken cancellationToken)
     {
         if (context.Response.HasStarted)
         {
@@ -1109,7 +1111,7 @@ public sealed class RequestCacheService
         if (!HttpMethods.IsHead(context.Request.Method))
         {
             context.Response.ContentLength = entry.Body.Length;
-            context.Response.Body.Write(entry.Body, 0, entry.Body.Length);
+            await context.Response.Body.WriteAsync(entry.Body.AsMemory(0, entry.Body.Length), cancellationToken).ConfigureAwait(false);
         }
     }
 

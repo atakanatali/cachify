@@ -22,11 +22,11 @@ public sealed class ResiliencyTests
         });
         _ = memory;
 
-        await cache.SetAsync("user:1", "cached").ConfigureAwait(false);
+        await cache.SetAsync("user:1", "cached");
 
         timeProvider.Advance(TimeSpan.FromSeconds(11));
 
-        var value = await cache.GetAsync<string>("user:1").ConfigureAwait(false);
+        var value = await cache.GetAsync<string>("user:1");
         value.Should().Be("cached");
     }
 
@@ -40,11 +40,11 @@ public sealed class ResiliencyTests
         });
         _ = memory;
 
-        await cache.SetAsync("user:2", "cached").ConfigureAwait(false);
+        await cache.SetAsync("user:2", "cached");
 
         timeProvider.Advance(TimeSpan.FromSeconds(16));
 
-        var value = await cache.GetAsync<string>("user:2").ConfigureAwait(false);
+        var value = await cache.GetAsync<string>("user:2");
         value.Should().BeNull();
     }
 
@@ -69,21 +69,21 @@ public sealed class ResiliencyTests
             }
         };
 
-        await cache.SetAsync("user:3", "stale").ConfigureAwait(false);
+        await cache.SetAsync("user:3", "stale");
         timeProvider.Advance(TimeSpan.FromSeconds(11));
 
         var factorySignal = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var fetchTask = cache.GetOrSetAsync("user:3", _ => factorySignal.Task);
 
         timeProvider.Advance(TimeSpan.FromSeconds(3));
-        var value = await fetchTask.ConfigureAwait(false);
+        var value = await fetchTask;
 
         value.Should().Be("stale");
 
         factorySignal.TrySetResult("fresh");
-        await setSignal.Task.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+        await setSignal.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
-        var refreshed = await cache.GetAsync<string>("user:3").ConfigureAwait(false);
+        var refreshed = await cache.GetAsync<string>("user:3");
         refreshed.Should().Be("fresh");
     }
 
@@ -132,7 +132,7 @@ public sealed class ResiliencyTests
         callCount.Should().Be(1);
 
         factorySignal.TrySetResult("value");
-        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        var results = await Task.WhenAll(tasks);
 
         results.Should().AllBeEquivalentTo("value");
         callCount.Should().Be(1);
@@ -149,10 +149,10 @@ public sealed class ResiliencyTests
             resilience.FailSafeMaxDuration = TimeSpan.FromSeconds(5);
         });
 
-        await cache.SetAsync("user:6", "cached").ConfigureAwait(false);
+        await cache.SetAsync("user:6", "cached");
         timeProvider.Advance(TimeSpan.FromSeconds(11));
 
-        var value = await cache.GetAsync<string>("user:6").ConfigureAwait(false);
+        var value = await cache.GetAsync<string>("user:6");
         value.Should().Be("cached");
     }
 

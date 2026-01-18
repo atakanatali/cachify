@@ -22,12 +22,12 @@ public sealed class BackplaneInvalidationTests
         using var cacheA = CreateComposite(memoryA, backplane, "node-a");
         using var cacheB = CreateComposite(memoryB, backplane, "node-b");
 
-        await cacheB.SetAsync("user:1", "stale").ConfigureAwait(false);
-        (await cacheB.GetAsync<string>("user:1").ConfigureAwait(false)).Should().Be("stale");
+        await cacheB.SetAsync("user:1", "stale");
+        (await cacheB.GetAsync<string>("user:1")).Should().Be("stale");
 
-        await cacheA.SetAsync("user:1", "fresh").ConfigureAwait(false);
+        await cacheA.SetAsync("user:1", "fresh");
 
-        var value = await cacheB.GetAsync<string>("user:1").ConfigureAwait(false);
+        var value = await cacheB.GetAsync<string>("user:1");
         value.Should().BeNull();
     }
 

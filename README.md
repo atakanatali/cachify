@@ -1,8 +1,88 @@
 # Cachify
 
-<img width="512" height="512" alt="Image" src="https://github.com/user-attachments/assets/8e5d4f11-0195-4b1e-8ac7-2f1b301dd2a3" />
+<p align="center">
+  <img width="180" height="180" alt="Cachify Logo" src="https://github.com/user-attachments/assets/8e5d4f11-0195-4b1e-8ac7-2f1b301dd2a3" />
+</p>
+
+<p align="center">
+  <strong>A modular caching stack for .NET with layered L1/L2 support</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/atakanatali/Cachify/actions/workflows/ci.yml">
+    <img src="https://github.com/atakanatali/Cachify/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  </a>
+  <a href="https://github.com/atakanatali/Cachify/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/badge/tests-20%20passed-brightgreen" alt="Tests" />
+  </a>
+  <a href="https://github.com/atakanatali/Cachify/releases">
+    <img src="https://img.shields.io/github/v/release/atakanatali/Cachify?include_prereleases" alt="Release" />
+  </a>
+  <a href="https://www.nuget.org/packages/Cachify.AspNetCore">
+    <img src="https://img.shields.io/nuget/v/Cachify.AspNetCore" alt="NuGet" />
+  </a>
+  <a href="https://github.com/atakanatali/Cachify/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/atakanatali/Cachify" alt="License" />
+  </a>
+</p>
+
+---
+
+## Core Architecture
+
+```mermaid
+graph TB
+    subgraph Application
+        A[Your App] --> B[ICacheService]
+    end
+    
+    subgraph Cachify Core
+        B --> C[CompositeCacheService]
+        C --> D{Cache Lookup}
+        D -->|L1 Hit| E[Memory Cache]
+        D -->|L1 Miss| F[Redis Cache]
+        F -->|L2 Hit| G[Populate L1]
+        F -->|L2 Miss| H[Factory Execution]
+        H --> I[Stampede Guard]
+        I --> J[Store in L1 + L2]
+    end
+    
+    subgraph Resiliency
+        C --> K[Soft/Hard Timeout]
+        C --> L[Stale Fallback]
+        C --> M[Background Refresh]
+    end
+    
+    subgraph Observability
+        C --> N[Metrics]
+        C --> O[Tracing]
+    end
+    
+    subgraph Backplane
+        E <--> P[Redis Pub/Sub]
+        P <--> Q[Other Instances]
+    end
+    
+    style E fill:#4CAF50,color:#fff
+    style F fill:#F44336,color:#fff
+    style I fill:#FF9800,color:#fff
+    style P fill:#9C27B0,color:#fff
+```
+
+### Package Structure
+
+| Package | Description | NuGet |
+|---------|-------------|-------|
+| `Cachify.Abstractions` | Interfaces and core models | [![NuGet](https://img.shields.io/nuget/v/Cachify.Abstractions)](https://www.nuget.org/packages/Cachify.Abstractions) |
+| `Cachify.Core` | Composite orchestration, stampede guard | [![NuGet](https://img.shields.io/nuget/v/Cachify.Core)](https://www.nuget.org/packages/Cachify.Core) |
+| `Cachify.Memory` | In-memory provider (L1) | [![NuGet](https://img.shields.io/nuget/v/Cachify.Memory)](https://www.nuget.org/packages/Cachify.Memory) |
+| `Cachify.Redis` | Redis provider (L2) + backplane | [![NuGet](https://img.shields.io/nuget/v/Cachify.Redis)](https://www.nuget.org/packages/Cachify.Redis) |
+| `Cachify.AspNetCore` | DI + request caching middleware | [![NuGet](https://img.shields.io/nuget/v/Cachify.AspNetCore)](https://www.nuget.org/packages/Cachify.AspNetCore) |
+
+---
 
 Cachify is a modular caching stack for .NET that supports layered L1/L2 caching with a minimal API and strong defaults.
+
 
 ## Quickstart
 
@@ -29,13 +109,6 @@ var value = await cache.GetOrSetAsync(
     cancellationToken);
 ```
 
-## Packages
-
-- `Cachify.Abstractions` — interfaces and core models.
-- `Cachify.Core` — composite orchestration, serializers, key builder, stampede guard.
-- `Cachify.Memory` — in-memory provider (L1).
-- `Cachify.Redis` — Redis provider (L2) + Redis backplane (optional).
-- `Cachify.AspNetCore` — DI + options integration.
 
 ## Request/response caching (ASP.NET Core)
 
