@@ -13,7 +13,7 @@
     <RepositoryUrl>https://github.com/atakanatali/Cachify</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/atakanatali/Cachify</PackageProjectUrl>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>NUGET-README.md</PackageReadmeFile>
     <PackageTags>cache;redis;memcached;memory;hybrid;dotnet;caching;l1;l2;layered;similarity</PackageTags>
     <Description>A modular caching stack for .NET that supports layered L1/L2 caching with minimal API and strong defaults.</Description>
 
@@ -27,7 +27,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\NUGET-README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\icon.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
