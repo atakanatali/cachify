@@ -1,14 +1,6 @@
 # Cachify
 
-![Cachify Logo](https://github.com/user-attachments/assets/8e5d4f11-0195-4b1e-8ac7-2f1b301dd2a3)
-
 **A modular caching stack for .NET with layered L1/L2 support**
-
-[![CI](https://github.com/atakanatali/Cachify/actions/workflows/ci.yml/badge.svg)](https://github.com/atakanatali/Cachify/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-20%20passed-brightgreen)](https://github.com/atakanatali/Cachify/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/atakanatali/Cachify?include_prereleases)](https://github.com/atakanatali/Cachify/releases)
-[![NuGet](https://img.shields.io/nuget/v/Cachify.AspNetCore)](https://www.nuget.org/packages/Cachify.AspNetCore)
-[![License](https://img.shields.io/github/license/atakanatali/Cachify)](https://github.com/atakanatali/Cachify/blob/main/LICENSE)
 
 ---
 
