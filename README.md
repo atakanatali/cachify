@@ -21,8 +21,8 @@
   <a href="https://www.nuget.org/packages/Cachify.AspNetCore">
     <img src="https://img.shields.io/nuget/v/Cachify.AspNetCore" alt="NuGet" />
   </a>
-  <a href="https://www.nuget.org/packages/Cachify.Core">
-    <img src="https://img.shields.io/nuget/dt/Cachify.Core" alt="Downloads" />
+  <a href="https://www.nuget.org/packages/Cachify.Memory">
+    <img src="https://img.shields.io/nuget/dt/Cachify.Memory" alt="Downloads" />
   </a>
   <a href="https://github.com/atakanatali/Cachify/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/atakanatali/Cachify" alt="License" />
